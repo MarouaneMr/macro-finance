@@ -1,0 +1,7 @@
+Portfolio: Long-Only
+Expected Return: 13.74%
+Risk (Standard Deviation): 27.21%
+Sharpe Ratio: 0.47
+Selected Stocks and Weights:
+BHRB: 100.00%
+Total Assets Held: 1

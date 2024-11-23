@@ -1,11 +1,12 @@
 import pandas as pd
 
-def load_price_data(filepath):
+def load_price_data(filepath, tickers):
     """
-    Load price data from a CSV file.
+    Load price data from a CSV file, filtering only the selected tickers.
     """
     prices = pd.read_csv(filepath, parse_dates=['Date'])
     prices.set_index('Date', inplace=True)
+    prices = prices[tickers]  # Filter for selected tickers
     return prices
 
 def calculate_returns(prices_df):
@@ -15,12 +16,15 @@ def calculate_returns(prices_df):
     returns = prices_df.pct_change().dropna()
     return returns
 
-def filter_tickers_by_metadata(prices_df, metadata_file, filter_col, filter_val=None):
+def filter_stocks_from_metrics(metrics_file, top_n=30, bottom_n=10):
     """
-    Filter tickers based on metadata.
-    If filter_val is None, return all tickers in the metadata.
+    Filter the top N and bottom N stocks based on return-to-risk ratio.
     """
-    metadata = pd.read_csv(metadata_file)
-    selected_tickers = metadata[filter_col].tolist()  # Extract tickers from the column
-    filtered_prices = prices_df[prices_df.columns.intersection(selected_tickers)]
-    return filtered_prices
+    metrics = pd.read_csv(metrics_file)
+    metrics['Return-to-Risk'] = metrics['Average Return'] / metrics['Risk']  # Calculate return-to-risk ratio
+
+    # Sort by return-to-risk ratio
+    top_stocks = metrics.sort_values('Return-to-Risk', ascending=False).head(top_n)['Symbol'].tolist()
+    bottom_stocks = metrics.sort_values('Return-to-Risk', ascending=True).head(bottom_n)['Symbol'].tolist()
+
+    return top_stocks, bottom_stocks

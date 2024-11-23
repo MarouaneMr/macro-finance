@@ -1,0 +1,26 @@
+Portfolio: Weight-Bounded
+Expected Return: 4.51%
+Risk (Standard Deviation): 7.40%
+Sharpe Ratio: 0.47
+Selected Stocks and Weights:
+BHRB: 5.00%
+LLY: 5.00%
+DECK: 5.00%
+ENPH: 5.00%
+CDNS: 5.00%
+CELH: 5.00%
+TRNS: 5.00%
+SPSC: 5.00%
+KNSL: 5.00%
+SNPS: 5.00%
+UFPT: 5.00%
+EU: 5.00%
+CAMT: 5.00%
+LSCC: 5.00%
+CMG: 5.00%
+MDB: 5.00%
+ARES: 5.00%
+KRYS: 5.00%
+FN: 5.00%
+FTNT: 5.00%
+Total Assets Held: 20

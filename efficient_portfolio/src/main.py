@@ -1,86 +1,97 @@
 import pandas as pd
 import numpy as np
-from data_processing import load_price_data, calculate_returns, filter_tickers_by_metadata
+from data_processing import calculate_returns, load_price_data, filter_stocks_from_metrics
 from portfolio_optimization import (
+    optimize_efficient_frontier,
     calculate_portfolio_metrics,
-    optimize_unconstrained,
-    optimize_long_only,
-    optimize_weight_bounds,
-    get_portfolio_composition,
-    save_portfolio_composition,
 )
-from visualize import plot_efficient_frontier, plot_portfolio_composition
+from visualize import plot_efficient_frontier
 
-def generate_portfolio_summary(portfolio_name, portfolio_return, portfolio_risk, sharpe_ratio, weights, tickers):
+
+def save_portfolio_results(label, weights, tickers, portfolio_return, portfolio_risk, sharpe_ratio, folder="results"):
     """
-    Generate a human-readable summary for a portfolio.
+    Save portfolio results as a text file.
     """
-    composition = get_portfolio_composition(weights, tickers)
-    sorted_composition = sorted(composition.items(), key=lambda x: -x[1])  # Sort by weight descending
-    top_assets = [f"{ticker}: {weight:.2%}" for ticker, weight in sorted_composition[:5]]  # Top 5 holdings
+    selected_assets = [(ticker, weight) for ticker, weight in zip(tickers, weights) if abs(weight) > 0.01]  # Non-zero weights
+    result_lines = [
+        f"Portfolio: {label}",
+        f"Expected Return: {portfolio_return:.2%}",
+        f"Risk (Standard Deviation): {portfolio_risk:.2%}",
+        f"Sharpe Ratio: {sharpe_ratio:.2f}",
+        "Selected Stocks and Weights:",
+        "\n".join([f"{ticker}: {weight:.2%}" for ticker, weight in selected_assets]),
+        f"Total Assets Held: {len(selected_assets)}"
+    ]
 
-    summary = f"""
-    {portfolio_name} Portfolio Summary:
-    ----------------------------------------
-    - Expected Return: {portfolio_return:.2%}
-    - Risk (Standard Deviation): {portfolio_risk:.2%}
-    - Sharpe Ratio: {sharpe_ratio:.2f} (if applicable)
-    - Top 5 Holdings: {', '.join(top_assets)}
-    - Total Assets: {len(tickers)} assets
-    """
-    print(summary)
-    return summary
+    with open(f"{folder}/{label}_portfolio.txt", "w") as f:
+        f.write("\n".join(result_lines))
+    print(f"{label} portfolio saved in {folder}/{label}_portfolio.txt")
 
-# Load and preprocess data
-prices = load_price_data('efficient_portfolio/data/monthly_prices.csv')
 
-# Filter prices for S&P 500 tickers
-filtered_prices = filter_tickers_by_metadata(prices, 'efficient_portfolio/data/tickers_sp500.csv', 'Symbol', None)
-returns = calculate_returns(filtered_prices)
+# Load metrics data and filter stocks
+metrics_file = 'efficient_portfolio/data/metrics.csv'  # File containing return-to-risk metrics
+prices_file = 'efficient_portfolio/data/monthly_prices.csv'
 
-# Calculate mean returns and covariance matrix
-mean_returns = returns.mean()
-covariance_matrix = returns.cov()
+# Step 1: Filter stocks based on return-to-risk ratio
+top_stocks, bottom_stocks = filter_stocks_from_metrics(metrics_file, top_n=30, bottom_n=10)
 
-# Optimize portfolios
-weights_unconstrained = optimize_unconstrained(mean_returns, covariance_matrix)
-weights_long_only = optimize_long_only(mean_returns, covariance_matrix)
-weights_weight_bounds = optimize_weight_bounds(mean_returns, covariance_matrix, lower=0, upper=0.05)
+# Step 2: Load price data for the selected stocks
+selected_tickers = top_stocks + bottom_stocks
+prices = load_price_data(prices_file, selected_tickers)
 
-# Calculate metrics for each portfolio
-metrics_unconstrained = calculate_portfolio_metrics(weights_unconstrained, mean_returns, covariance_matrix)
-metrics_long_only = calculate_portfolio_metrics(weights_long_only, mean_returns, covariance_matrix)
-metrics_weight_bounds = calculate_portfolio_metrics(weights_weight_bounds, mean_returns, covariance_matrix)
+# Step 3: Calculate returns for the filtered stocks
+returns = calculate_returns(prices)
 
-# Save portfolio compositions
+# Step 4: Compute mean returns and covariance matrix
+mean_returns = returns.mean().to_numpy()
+covariance_matrix = returns.cov().to_numpy()
 tickers = returns.columns.tolist()
-save_portfolio_composition('efficient_portfolio/results/unconstrained_portfolio.csv', 'Unconstrained', weights_unconstrained, tickers)
-save_portfolio_composition('efficient_portfolio/results/long_only_portfolio.csv', 'Long-Only', weights_long_only, tickers)
-save_portfolio_composition('efficient_portfolio/results/weight_bounds_portfolio.csv', 'Weight-Bounded', weights_weight_bounds, tickers)
 
-# Generate and print summaries
-summary_unconstrained = generate_portfolio_summary(
-    "Unconstrained", *metrics_unconstrained, weights_unconstrained, tickers
-)
-summary_long_only = generate_portfolio_summary(
-    "Long-Only", *metrics_long_only, weights_long_only, tickers
-)
-summary_weight_bounds = generate_portfolio_summary(
-    "Weight-Bounded", *metrics_weight_bounds, weights_weight_bounds, tickers
-)
+# Generate Portfolios
+def generate_portfolios():
+    """
+    Generate portfolios for each constraint case.
+    """
+    # Unconstrained Portfolio
+    weights_unconstrained = optimize_efficient_frontier(mean_returns, covariance_matrix, max(mean_returns), weight_bounds=None)
+    return_unconstrained, risk_unconstrained, sharpe_unconstrained = calculate_portfolio_metrics(
+        weights_unconstrained, mean_returns, covariance_matrix
+    )
+    save_portfolio_results(
+        "Unconstrained",
+        weights_unconstrained,
+        tickers,
+        return_unconstrained,
+        risk_unconstrained,
+        sharpe_unconstrained
+    )
 
-# Save summaries to text files
-with open('efficient_portfolio/results/portfolio_summaries.txt', 'w') as f:
-    f.write(summary_unconstrained)
-    f.write(summary_long_only)
-    f.write(summary_weight_bounds)
+    # Long-Only Portfolio
+    weights_long_only = optimize_efficient_frontier(mean_returns, covariance_matrix, max(mean_returns), weight_bounds=[(0, None)] * len(tickers))
+    return_long_only, risk_long_only, sharpe_long_only = calculate_portfolio_metrics(
+        weights_long_only, mean_returns, covariance_matrix
+    )
+    save_portfolio_results(
+        "Long-Only",
+        weights_long_only,
+        tickers,
+        return_long_only,
+        risk_long_only,
+        sharpe_long_only
+    )
 
-# Visualize results
-plot_efficient_frontier(pd.DataFrame({
-    'Risk': [metrics_unconstrained[1], metrics_long_only[1], metrics_weight_bounds[1]],
-    'Return': [metrics_unconstrained[0], metrics_long_only[0], metrics_weight_bounds[0]],
-}), "Efficient Frontiers for S&P 500")
+    # Weight-Bounded Portfolio (0 <= w_i <= 0.05)
+    weights_bounded = optimize_efficient_frontier(mean_returns, covariance_matrix, max(mean_returns), weight_bounds=[(0, 0.05)] * len(tickers))
+    return_bounded, risk_bounded, sharpe_bounded = calculate_portfolio_metrics(
+        weights_bounded, mean_returns, covariance_matrix
+    )
+    save_portfolio_results(
+        "Weight-Bounded",
+        weights_bounded,
+        tickers,
+        return_bounded,
+        risk_bounded,
+        sharpe_bounded
+    )
 
-plot_portfolio_composition(weights_unconstrained, tickers, "Unconstrained Portfolio (S&P 500)")
-plot_portfolio_composition(weights_long_only, tickers, "Long-Only Portfolio (S&P 500)")
-plot_portfolio_composition(weights_weight_bounds, tickers, "Weight-Bounded Portfolio (S&P 500)")
+generate_portfolios()
