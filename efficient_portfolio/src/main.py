@@ -5,7 +5,7 @@ from portfolio_optimization import (
     optimize_efficient_frontier,
     calculate_portfolio_metrics,
 )
-from visualize import plot_efficient_frontier
+from visualize import plot_efficient_frontiers,plot_portfolio_composition,plot_risk_return_summary
 
 
 def save_portfolio_results(label, weights, tickers, portfolio_return, portfolio_risk, sharpe_ratio, folder="results"):
@@ -47,16 +47,23 @@ mean_returns = returns.mean().to_numpy()
 covariance_matrix = returns.cov().to_numpy()
 tickers = returns.columns.tolist()
 
-# Generate Portfolios
+portfolio_results= {}
+
 def generate_portfolios():
     """
-    Generate portfolios for each constraint case.
+    Generate portfolios for each constraint case and visualize results.
     """
     # Unconstrained Portfolio
     weights_unconstrained = optimize_efficient_frontier(mean_returns, covariance_matrix, max(mean_returns), weight_bounds=None)
     return_unconstrained, risk_unconstrained, sharpe_unconstrained = calculate_portfolio_metrics(
         weights_unconstrained, mean_returns, covariance_matrix
     )
+    portfolio_results["Unconstrained"] = {
+        "weights": weights_unconstrained,
+        "return": return_unconstrained,
+        "risk": risk_unconstrained,
+        "sharpe": sharpe_unconstrained
+    }
     save_portfolio_results(
         "Unconstrained",
         weights_unconstrained,
@@ -71,6 +78,12 @@ def generate_portfolios():
     return_long_only, risk_long_only, sharpe_long_only = calculate_portfolio_metrics(
         weights_long_only, mean_returns, covariance_matrix
     )
+    portfolio_results["Long-Only"] = {
+        "weights": weights_long_only,
+        "return": return_long_only,
+        "risk": risk_long_only,
+        "sharpe": sharpe_long_only
+    }
     save_portfolio_results(
         "Long-Only",
         weights_long_only,
@@ -85,6 +98,12 @@ def generate_portfolios():
     return_bounded, risk_bounded, sharpe_bounded = calculate_portfolio_metrics(
         weights_bounded, mean_returns, covariance_matrix
     )
+    portfolio_results["Weight-Bounded"] = {
+        "weights": weights_bounded,
+        "return": return_bounded,
+        "risk": risk_bounded,
+        "sharpe": sharpe_bounded
+    }
     save_portfolio_results(
         "Weight-Bounded",
         weights_bounded,
@@ -93,5 +112,11 @@ def generate_portfolios():
         risk_bounded,
         sharpe_bounded
     )
+
+    # Visualization
+    plot_efficient_frontiers(portfolio_results)
+    for label, result in portfolio_results.items():
+        plot_portfolio_composition(result["weights"], tickers, label)
+    plot_risk_return_summary(portfolio_results)
 
 generate_portfolios()
